@@ -10,29 +10,35 @@ using System.Windows.Forms;
 
 namespace UMFST.MIP.Variant1_Bookstore
 {
+    // Fő ablak osztálya
     public partial class MainWindow : Form
     {
+        // A JSON adatfájl URL címe
         private const string JsonUrl = "https://cdn.shopify.com/s/files/1/0883/3282/8936/files/data_bookstore_final.json?v=1762418524";
-        private const string InvalidLogFile = "invalid_bookstore.txt";
+        // A kért riportfájl
         private const string ReportFile = "sales_report.txt";
+        // Az InvalidLogFile konstanst áthelyeztük a DatabaseService.cs-be
 
-        private string _storeName = "BOOKVERSE";
-        private string _storeCurrency = "EUR";
+        // A változók itt kapnak értéket, hogy ne legyenek 'null'
+        private string storeName = string.Empty;
+        private string storeCurrency = string.Empty;
 
         public MainWindow()
         {
             InitializeComponent();
         }
 
+        // Ablak betöltése esemény kezelője
         private async void MainWindow_Load(object sender, EventArgs e)
         {
+            // DataGridView oszlopok automatikus generálása
             dgvBooks.AutoGenerateColumns = true;
             dgvOrders.AutoGenerateColumns = true;
             dgvOrderItems.AutoGenerateColumns = true;
             lblStatus.Text = "Ready. Please reset the database to load data.";
         }
 
-        // Event handler a 'Reset' gombhoz
+        // Adatbázis visszaállítása gomb kezelője
         private async void btnReset_Click(object sender, EventArgs e)
         {
             lblStatus.Text = "Resetting database... Downloading JSON...";
@@ -40,7 +46,7 @@ namespace UMFST.MIP.Variant1_Bookstore
 
             try
             {
-                // 1. JSON letöltése
+                // 1 json letöltése
                 string jsonContent;
                 using (var client = new HttpClient())
                 {
@@ -48,46 +54,64 @@ namespace UMFST.MIP.Variant1_Bookstore
                 }
                 lblStatus.Text = "JSON downloaded. Parsing data...";
 
-                // 2. JSON feldolgozása
+                // 2 json feldolgozása
+                // ez a reszt a JSON-ból beolvassa az üzlet nevét és pénznemét
                 var data = JsonConvert.DeserializeObject<BookstoreData>(jsonContent);
-                _storeName = data.Store.Name;
-                _storeCurrency = data.Store.Currency;
+                storeName = data.Store.Name;
+                storeCurrency = data.Store.Currency;
 
-                // 3. Hibás minták logolása
-                if (File.Exists(InvalidLogFile)) File.Delete(InvalidLogFile);
-                if (data.InvalidSamples != null)
-                {
-                    var invalidLog = new StringBuilder();
-                    invalidLog.AppendLine("=== INVALID SAMPLES LOG ===");
-                    foreach (var sample in data.InvalidSamples)
-                    {
-                        // *** ITT A JAVÍTÁS ***
-                        // Egyértelműsítve a Formatting enum
-                        invalidLog.AppendLine(sample.ToString(Newtonsoft.Json.Formatting.None));
-                    }
-                    File.WriteAllText(InvalidLogFile, invalidLog.ToString());
-                }
-
-                // 4. Adatbázis inicializálása
+                // 3 adatbázis inicializálása
                 lblStatus.Text = "Initializing database schema...";
                 await Task.Run(() => DatabaseService.InitializeDatabase());
 
-                // 5. Adatok importálása
-                lblStatus.Text = "Importing data into database...";
+                // 4 adatok importálása esetleges hibák naplózása es szurese
+                lblStatus.Text = "Importing data and logging invalid entries...";
                 await Task.Run(() => DatabaseService.BulkInsert(data));
 
-                // 6. UI frissítése
+                // 5 ui frissítése
                 lblStatus.Text = "Loading UI components...";
                 LoadBooksTab();
                 LoadOrdersTab();
                 LoadReportsTab();
 
-                lblStatus.Text = "Database reset successful!";
+                // Frissített sikeres üzenet
+                lblStatus.Text = "Database reset successful! (Invalid entries logged to invalid_bookstore.txt)";
+            }
+            catch (HttpRequestException httpEx)
+            {
+                lblStatus.Text = "Error: Failed to download file.";
+                MessageBox.Show(
+                   "Nem sikerült letölteni a JSON adatfájlt a szerverről. Ellenőrizd az internetkapcsolatot.\n\nRészletek: " + httpEx.Message,
+                   "Letöltési Hiba",
+                   MessageBoxButtons.OK,
+                   MessageBoxIcon.Error);
+            }
+            catch (JsonException jsonEx)
+            {
+                lblStatus.Text = "Error: Failed to process JSON data.";
+                MessageBox.Show(
+                         "Hiba történt a JSON fájl feldolgozása közben.\n\nRészletek: " + jsonEx.Message,
+                         "JSON Feldolgozási Hiba",
+                         MessageBoxButtons.OK,
+                         MessageBoxIcon.Warning);
+            }
+            catch (DllNotFoundException dllEx)
+            {
+                lblStatus.Text = "Error: Critical component missing.";
+                MessageBox.Show(
+                         "Hiba: Egy kritikus adatbázis-komponens (e_sqlite3.dll) hiányzik vagy nem tölthető be.\n\nA program futása folytatódik, de az adatbázis-műveletek nem fognak működni.",
+                         "Adatbázis Hiba",
+                         MessageBoxButtons.OK,
+                         MessageBoxIcon.Error);
             }
             catch (Exception ex)
             {
-                lblStatus.Text = "An error occurred during reset.";
-                MessageBox.Show($"Error: {ex.Message}", "Database Reset Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                lblStatus.Text = "An unexpected error occurred.";
+                MessageBox.Show(
+                         "Váratlan hiba történt az adatbázis-visszaállítás során.\n\nRészletek: " + ex.Message,
+                         "Általános Hiba",
+                         MessageBoxButtons.OK,
+                         MessageBoxIcon.Error);
             }
             finally
             {
@@ -95,30 +119,35 @@ namespace UMFST.MIP.Variant1_Bookstore
             }
         }
 
-        // --- Tab 1: Könyvek ---
+
+        // 1 könyvek ful
 
         private void LoadBooksTab(string searchTerm = null)
         {
             try
             {
                 dgvBooks.DataSource = DatabaseService.GetBooks(searchTerm);
-                dgvBooks.Columns["Isbn"].Width = 120;
-                dgvBooks.Columns["Title"].Width = 250;
-                dgvBooks.Columns["Author"].Width = 150;
-                dgvBooks.Columns["Price"].DefaultCellStyle.Format = "c";
+                if (dgvBooks.Columns.Count > 0)
+                {
+                    dgvBooks.Columns["Isbn"].Width = 120;
+                    dgvBooks.Columns["Title"].Width = 250;
+                    dgvBooks.Columns["Author"].Width = 150;
+                    dgvBooks.Columns["Price"].DefaultCellStyle.Format = "c";
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading books: {ex.Message}");
+                MessageBox.Show($"Hiba a könyvek betöltésekor: {ex.Message}", "Adatbázis Hiba");
             }
         }
 
-        // Event handler a 'Filter' (Search) gombhoz
+        // Szűrés gomb kezelője
         private void btnFilter_Click(object sender, EventArgs e)
         {
             LoadBooksTab(txtSearchBooks.Text);
         }
 
+        // Újrakészletezés gomb kezelője
         private void btnRestock_Click(object sender, EventArgs e)
         {
             if (dgvBooks.SelectedRows.Count == 0)
@@ -145,11 +174,11 @@ namespace UMFST.MIP.Variant1_Bookstore
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error restocking book: {ex.Message}");
+                MessageBox.Show($"Hiba az újrakészletezéskor: {ex.Message}", "Adatbázis Hiba");
             }
         }
 
-        // --- Tab 2: Rendelések ---
+        // 2 rendelesek ful
 
         private void LoadOrdersTab()
         {
@@ -162,10 +191,11 @@ namespace UMFST.MIP.Variant1_Bookstore
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading orders: {ex.Message}");
+                MessageBox.Show($"Hiba a rendelések betöltésekor: {ex.Message}", "Adatbázis Hiba");
             }
         }
 
+        // Rendelés kiválasztás változás kezelése
         private void dgvOrders_SelectionChanged(object sender, EventArgs e)
         {
             if (dgvOrders.SelectedRows.Count == 0)
@@ -183,12 +213,12 @@ namespace UMFST.MIP.Variant1_Bookstore
                 dgvOrderItems.DataSource = DatabaseService.GetOrderItems(orderId);
 
                 decimal total = DatabaseService.GetOrderTotal(orderId);
-                lblOrderTotal.Text = $"Total: {total:F2} {_storeCurrency}";
+                lblOrderTotal.Text = $"Total: {total:F2} {storeCurrency}";
 
                 string status = selectedRow.Cells["Status"].Value.ToString().ToLower();
                 string paymentStatus = selectedRow.Cells["PaymentStatus"].Value.ToString().ToLower();
 
-                if (status == "pending" || status == "failed" || paymentStatus == "pending" || paymentStatus == "failed")
+                if (status == "pending" || paymentStatus.Contains("pending"))
                 {
                     selectedRow.DefaultCellStyle.BackColor = Color.LightYellow;
                     selectedRow.DefaultCellStyle.ForeColor = Color.Black;
@@ -201,24 +231,25 @@ namespace UMFST.MIP.Variant1_Bookstore
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading order details: {ex.Message}");
+                MessageBox.Show($"Hiba a rendelés részleteinek betöltésekor: {ex.Message}", "Adatbázis Hiba");
             }
         }
 
-        // --- Tab 3: Riportok ---
+        // 3 riportok ful
         private void LoadReportsTab()
         {
             try
             {
-                txtReport.Text = DatabaseService.GenerateReport(_storeName, _storeCurrency);
+                //jsonbol generalt ertekek hasznalata a storeName es storeCurrency valtozokban
+                txtReport.Text = DatabaseService.GenerateReport(storeName, storeCurrency);
             }
             catch (Exception ex)
             {
-                txtReport.Text = $"Error generating report: {ex.Message}";
+                txtReport.Text = $"Hiba a riport generálásakor: {ex.Message}";
             }
         }
 
-        // Event handler az 'Export' gombhoz
+        // Riport exportálása fájlba
         private void btnExport_Click(object sender, EventArgs e)
         {
             try

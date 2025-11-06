@@ -1,0 +1,41 @@
+=== INVALID ENTRIES LOG ===
+
+[Malformed Book]: (Missing ISBN)
+{
+  "Isbn": "",
+  "Title": "",
+  "AuthorId": "A99",
+  "Price": -15.0,
+  "Stock": -3,
+  "Categories": []
+}
+--------------------
+[Invalid Order]: (Date is 'BAD_DATE')
+{
+  "Id": "O3",
+  "date": "BAD_DATE",
+  "Customer": {
+    "Id": "C-003",
+    "Name": "Invalid Entry",
+    "Email": "wrongformat"
+  },
+  "Items": [
+    {
+      "isbn": "9780132350884",
+      "qty": -2,
+      "UnitPrice": 42.5,
+      "Discount": null
+    },
+    {
+      "isbn": "UNKNOWN-ISBN",
+      "qty": 1,
+      "UnitPrice": 10.0,
+      "Discount": null
+    }
+  ],
+  "payment": {
+    "Method": "CARD"
+  },
+  "Status": "PENDING"
+}
+--------------------

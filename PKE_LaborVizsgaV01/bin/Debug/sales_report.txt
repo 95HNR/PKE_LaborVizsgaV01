@@ -1,0 +1,6 @@
+BOOKVERSE REPORT (2025)
+=======================
+Total sales: 192.90 EUR
+Books below stock threshold (5):
+- Design Patterns (3 left)
+Best-selling: Clean Code (2 units sold)
